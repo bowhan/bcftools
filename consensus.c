@@ -114,11 +114,12 @@ typedef struct
     bcf_hdr_t *hdr;
     FILE *fp_out;
     FILE *fp_chain;
+    htsFile *fp_skipped_vcf;
     char **argv;
     int argc, output_iupac, haplotype, allele, isample, napplied;
     uint8_t *iupac_bitmask;
     int miupac_bitmask;
-    char *fname, *ref_fname, *sample, *output_fname, *mask_fname, *chain_fname, missing_allele, absent_allele;
+    char *fname, *ref_fname, *sample, *output_fname, *mask_fname, *chain_fname, *skipped_vcf_fname, missing_allele, absent_allele;
     char mark_del, mark_ins, mark_snv;
 }
 args_t;
@@ -251,6 +252,17 @@ static void init_data(args_t *args)
         if ( ! args->fp_chain ) error("Failed to create %s: %s\n", args->chain_fname, strerror(errno));
         args->chain_id = 0;
     }
+    if ( args->skipped_vcf_fname )
+    {
+        char wmode[8];
+        set_wmode(wmode,FT_VCF,args->skipped_vcf_fname,1);
+        args->fp_skipped_vcf = hts_open(args->skipped_vcf_fname, wmode);
+        if ( ! args->fp_skipped_vcf ) error("Failed to create %s: %s\n", args->skipped_vcf_fname, strerror(errno));
+    }
+    if ( bcf_hdr_write(args->fp_skipped_vcf, args->hdr) != 0 )
+    {
+        error("[%s] Error: cannot write to %s\n", __func__,args->skipped_vcf_fname);
+    }
     rbuf_init(&args->vcf_rbuf, 100);
     args->vcf_buf = (bcf1_t**) calloc(args->vcf_rbuf.m, sizeof(bcf1_t*));
     if ( args->output_fname ) {
@@ -302,6 +314,7 @@ static void destroy_data(args_t *args)
         if ( fclose(args->fp_chain) ) error("Close failed: %s\n", args->chain_fname);
     if ( fclose(args->fp_out) ) error("Close failed: %s\n", args->output_fname);
     destroy_chain(args->chain);
+    hts_close(args->fp_skipped_vcf);
 }
 
 static void init_region(args_t *args, char *line)
@@ -708,6 +721,10 @@ static void apply_variant(args_t *args, bcf1_t *rec)
         if ( overlap )
         {
             fprintf(stderr,"The site %s:%"PRId64" overlaps with another variant, skipping...\n", bcf_seqname(args->hdr,rec),(int64_t) rec->pos+1);
+            if ( bcf_write1(args->fp_skipped_vcf, args->hdr, rec) != 0)
+            {
+                error("[%s] Error: cannot write to %s\n", __func__, args->skipped_vcf_fname);
+            }
             return;
         }
 
@@ -1058,6 +1075,7 @@ static void usage(args_t *args)
     fprintf(stderr, "        --mask-with CHAR|uc|lc     replace with CHAR (skips overlapping variants); change to uppercase (uc) or lowercase (lc)\n");
     fprintf(stderr, "    -M, --missing CHAR             output CHAR instead of skipping a missing genotype \"./.\"\n");
     fprintf(stderr, "    -o, --output FILE              write output to a file [standard output]\n");
+    fprintf(stderr, "    -U, --unused FILE              write unused VCF to a file\n");
     fprintf(stderr, "    -p, --prefix STRING            prefix to add to output sequence names\n");
     fprintf(stderr, "    -s, --sample NAME              apply variants of the given sample\n");
     fprintf(stderr, "Examples:\n");
@@ -1090,13 +1108,14 @@ int main_consensus(int argc, char *argv[])
         {"fasta-ref",1,0,'f'},
         {"mask",1,0,'m'},
         {"missing",1,0,'M'},
+        {"unused",1,0,'U'},
         {"absent",1,0,'a'},
         {"chain",1,0,'c'},
         {"prefix",required_argument,0,'p'},
         {0,0,0,0}
     };
     int c;
-    while ((c = getopt_long(argc, argv, "h?s:1Ii:e:H:f:o:m:c:M:p:a:",loptions,NULL)) >= 0)
+    while ((c = getopt_long(argc, argv, "h?s:1Ii:e:H:f:o:U:m:c:M:p:a:",loptions,NULL)) >= 0)
     {
         switch (c)
         {
@@ -1114,6 +1133,7 @@ int main_consensus(int argc, char *argv[])
             case 'p': args->chr_prefix = optarg; break;
             case 's': args->sample = optarg; break;
             case 'o': args->output_fname = optarg; break;
+            case 'U': args->skipped_vcf_fname = optarg; break;
             case 'I': args->output_iupac = 1; break;
             case 'e':
                 if ( args->filter_str ) error("Error: only one -i or -e expression can be given, and they cannot be combined\n");
