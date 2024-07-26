@@ -540,6 +540,7 @@ static void usage(args_t *args)
     fprintf(stderr, "    -c/C, --min-ac/--max-ac INT[:TYPE]     Minimum/maximum count for non-reference (nref), 1st alternate (alt1), least frequent\n");
     fprintf(stderr, "                                               (minor), most frequent (major) or sum of all but most frequent (nonmajor) alleles [nref]\n");
     fprintf(stderr, "    -f,   --apply-filters LIST             Require at least one of the listed FILTER strings (e.g. \"PASS,.\")\n");
+    fprintf(stderr, "    -F,   --filter-on-filters LIST         Drop if any one of the listed FILTER strings present (e.g. \"strand_bias,weak_evidence\")\n");
     fprintf(stderr, "    -g,   --genotype [^]hom|het|miss       Require one or more hom/het/missing genotype or, if prefixed with \"^\", exclude such sites\n");
     fprintf(stderr, "    -i/e, --include/--exclude EXPR         Select/exclude sites for which the expression is true (see man page for details)\n");
     fprintf(stderr, "    -k/n, --known/--novel                  Select known/novel sites only (ID is not/is '.')\n");
@@ -592,6 +593,7 @@ int main_vcfview(int argc, char *argv[])
         {"uncalled",no_argument,NULL,'u'},
         {"exclude-uncalled",no_argument,NULL,'U'},
         {"apply-filters",required_argument,NULL,'f'},
+        {"filter-on-filters",required_argument,NULL,'F'},
         {"known",no_argument,NULL,'k'},
         {"novel",no_argument,NULL,'n'},
         {"min-alleles",required_argument,NULL,'m'},
@@ -621,7 +623,7 @@ int main_vcfview(int argc, char *argv[])
         {NULL,0,NULL,0}
     };
     char *tmp;
-    while ((c = getopt_long(argc, argv, "l:t:T:r:R:o:O:s:S:Gf:knv:V:m:M:aAuUhHc:C:Ii:e:xXpPq:Q:g:W::",loptions,NULL)) >= 0)
+    while ((c = getopt_long(argc, argv, "l:t:T:r:R:o:O:s:S:Gf:F:knv:V:m:M:aAuUhHc:C:Ii:e:xXpPq:Q:g:W::",loptions,NULL)) >= 0)
     {
         char allele_type[9] = "nref";
         switch (c)
@@ -668,6 +670,7 @@ int main_vcfview(int argc, char *argv[])
             case 'G': args->sites_only = 1; break;
 
             case 'f': args->files->apply_filters = optarg; break;
+            case 'F': args->files->filter_on_filters = optarg; break;
             case 'k': args->known = 1; break;
             case 'n': args->novel = 1; break;
             case 'm':
